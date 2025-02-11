@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Meter Reading Platform</title>
+</head>
+<body>
+  <h1>Smart Meter Reading Platform</h1>
+  
+  <!-- Button: Register new account (redirect to registration page) -->
+  <button onclick="location.href='/register'">Register New Account</button>
+  
+  <!-- Button: Collect meter readings -->
+  <button onclick="collectMeterReading()">Collect Meter Readings</button>
+  
+  <!-- Button: Query power usage (assuming corresponding page exists) -->
+  <button onclick="location.href='/query_usage'">Query Power Usage</button>
+  
+  <!-- Display collection results -->
+  <pre id="meterReadingResult"></pre>
+  
+  <script>
+    function collectMeterReading(){
+      fetch('/meter_reading', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          document.getElementById("meterReadingResult").textContent = JSON.stringify(data, null, 2);
+        })
+        .catch(err => {
+          document.getElementById("meterReadingResult").textContent = 'Error: ' + err;
+        });
+    }
+  </script>
+</body>
+</html>

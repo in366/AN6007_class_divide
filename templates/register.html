@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Smart Meter Platform - Registration</title>
+  <style>
+    .note {
+      color: #666;
+      font-size: 0.9em;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Register New Account</h1>
+  
+  <form action="/register" method="POST">
+    <div>
+      <label for="area">Area:</label>
+      <input type="text" id="area" name="area" required>
+    </div>
+    <br>
+    <div>
+      <label for="dwelling">Dwelling Number:</label>
+      <input type="text" id="dwelling" name="dwelling" required>
+    </div>
+    <br>
+    <button type="submit">Submit Registration</button>
+  </form>
+  <div class="note">
+    Notes:
+    <ul>
+      <li>Initial meter reading for new accounts is 0</li>
+      <li>System start date is May 1st, 2024</li>
+      <li>Data collection automatically records power usage every 30 minutes throughout the day</li>
+    </ul>
+  </div>
+  <br>
+  <button onclick="location.href='/'">Return to Home</button>
+  <!-- Display registration results -->
+  <pre id="registerResult"></pre>
+  <script>
+    document.querySelector('form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const formData = new FormData(this);
+      
+      fetch('/register', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById('registerResult').textContent = JSON.stringify(data, null, 2);
+      })
+      .catch(err => {
+        document.getElementById('registerResult').textContent = 'Error: ' + err;
+      });
+    });
+  </script>
+</body>
+</html>
