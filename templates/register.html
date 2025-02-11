@@ -4,44 +4,20 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Meter Platform - Registration</title>
-    <link rel="stylesheet" href="../static/styles.css">
-    <style>
-        select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid #e5e7eb;
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-            background-color: white;
-            cursor: pointer;
-        }
-
-        select:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-
-        select:disabled {
-            background-color: #f3f4f6;
-            cursor: not-allowed;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
     <div class="container">
         <h1>Register New Account</h1>
         
         <div class="form-container">
-            <form action="/register" method="POST">
+            <form action="/register" method="POST" id="registrationForm">
                 <div class="form-group">
                     <label for="region">Region:</label>
                     <select id="region" name="region" required>
                         <option value="">Select a region</option>
                         <option value="Central Region">Central Region</option>
                         <option value="North Region">North Region</option>
-                        <option value="South Region">South Region</option>
                         <option value="East Region">East Region</option>
                         <option value="West Region">West Region</option>
                         <option value="North East Region">North East Region</option>
@@ -67,6 +43,19 @@
                         <option value="6">4-room</option>
                     </select>
                 </div>
+
+                <div class="form-group">
+                    <label for="meterId">Meter ID:</label>
+                    <input 
+                        type="text" 
+                        id="meterId" 
+                        name="meterId" 
+                        class="meter-id-input"
+                        placeholder="Format: 999-999-999"
+                        required
+                        pattern="\d{3}-\d{3}-\d{3}"
+                    >
+                </div>
                 
                 <button type="submit">Submit Registration</button>
             </form>
@@ -86,110 +75,190 @@
         <pre id="registerResult"></pre>
     </div>
 
-    <script>
-        // Area data
-        const areaData = [
-            {areaId: "1001", area: "Bishan", region: "Central Region"},
-            {areaId: "1002", area: "Sembawang", region: "North Region"},
-            {areaId: "1003", area: "Yishun", region: "North Region"},
-            {areaId: "1004", area: "Outram", region: "Central Region"},
-            {areaId: "1005", area: "Kallang", region: "Central Region"},
-            {areaId: "1007", area: "Bukit Batok", region: "West Region"},
-            {areaId: "1008", area: "Sengkang", region: "North East Region"},
-            {areaId: "1009", area: "Clementi", region: "West Region"},
-            {areaId: "1010", area: "Woodlands", region: "North Region"},
-            {areaId: "1011", area: "Choa Chu Kang", region: "West Region"},
-            {areaId: "1012", area: "Serangoon", region: "North East Region"},
-            {areaId: "1014", area: "Tampines", region: "East Region"},
-            {areaId: "1016", area: "Ang Mo Kio", region: "North East Region"},
-            {areaId: "1017", area: "Toa Payoh", region: "Central Region"},
-            {areaId: "1018", area: "Bedok", region: "East Region"},
-            {areaId: "1020", area: "Jurong East", region: "West Region"},
-            {areaId: "1021", area: "Hougang", region: "North East Region"},
-            {areaId: "1022", area: "Bukit Merah", region: "Central Region"},
-            {areaId: "1024", area: "Queenstown", region: "Central Region"},
-            {areaId: "1025", area: "Geylang", region: "Central Region"},
-            {areaId: "1026", area: "Novena", region: "Central Region"},
-            {areaId: "1027", area: "Jurong West", region: "West Region"},
-            {areaId: "1028", area: "Marine Parade", region: "Central Region"},
-            {areaId: "1029", area: "Rochor", region: "Central Region"},
-            {areaId: "1030", area: "Pioneer", region: "West Region"},
-            {areaId: "1031", area: "Pasir Ris", region: "East Region"},
-            {areaId: "1032", area: "Paya Lebar", region: "East Region"},
-            {areaId: "1033", area: "Mandai", region: "North Region"},
-            {areaId: "1034", area: "Downtown", region: "Central Region"},
-            {areaId: "1035", area: "Seletar", region: "North East Region"},
-            {areaId: "1036", area: "Sungei Kadut", region: "North Region"},
-            {areaId: "1037", area: "Bukit Panjang", region: "West Region"},
-            {areaId: "1038", area: "Museum", region: "Central Region"},
-            {areaId: "1039", area: "Singapore River", region: "Central Region"},
-            {areaId: "1040", area: "Bukit Timah", region: "Central Region"},
-            {areaId: "1041", area: "Changi", region: "East Region"},
-            {areaId: "1042", area: "River Valley", region: "Central Region"},
-            {areaId: "1043", area: "Tanglin", region: "Central Region"},
-            {areaId: "1044", area: "Punggol", region: "North East Region"},
-            {areaId: "1045", area: "Orchard", region: "Central Region"},
-            {areaId: "1046", area: "Southern Islands", region: "Central Region"},
-            {areaId: "1047", area: "Newton", region: "Central Region"}
-        ];
+<script>
+    // Store area data globally
+    const state = {
+        areaData: [],
+        setAreaData(data) {
+            this.areaData = data;
+        },
+        getAreaData() {
+            return this.areaData;
+        }
+    };
 
-        // Handle region selection
-        document.getElementById('region').addEventListener('change', function() {
-            const areaSelect = document.getElementById('area');
-            const selectedRegion = this.value;
-            
-            // Clear current options
-            areaSelect.innerHTML = '<option value="">Select an area</option>';
-            
-            if (!selectedRegion) {
-                areaSelect.disabled = true;
-                return;
+    // Fetch area data from API
+    async function fetchAreaData() {
+        try {
+            const response = await fetch('/static/js/area_data.json');
+            if (!response.ok) {
+                throw new Error('Failed to fetch area data');
             }
+            const data = await response.json();
+            state.setAreaData(data.areas || []);
+        } catch (error) {
+            console.error('Error loading area data:', error);
+            document.getElementById('registerResult').textContent = 'Error: Failed to load area data. Please try again later.';
+        }
+    }
 
-            // Filter and add areas for selected region
-            const areas = areaData
-                .filter(item => item.region === selectedRegion)
-                .sort((a, b) => a.area.localeCompare(b.area));
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAreaData();
+    });
 
-            areas.forEach(item => {
-                const option = document.createElement('option');
-                option.value = item.areaId;
-                option.textContent = item.area;
-                areaSelect.appendChild(option);
+    // Validate Meter ID format
+    function validateMeterId(meterId) {
+        const regex = /^\d{3}-\d{3}-\d{3}$/;
+        return regex.test(meterId);
+    }
+
+    // Format Meter ID as user types
+    document.getElementById('meterId').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+        if (value.length > 9) value = value.slice(0, 9);
+        
+        // Add hyphens
+        if (value.length >= 6) {
+            value = value.slice(0, 3) + '-' + value.slice(3, 6) + '-' + value.slice(6);
+        } else if (value.length >= 3) {
+            value = value.slice(0, 3) + '-' + value.slice(3);
+        }
+        
+        e.target.value = value;
+    });
+
+    // Handle region selection
+    document.getElementById('region').addEventListener('change', function() {
+        const areaSelect = document.getElementById('area');
+        const selectedRegion = this.value;
+        
+        // Clear current options
+        areaSelect.innerHTML = '<option value="">Select an area</option>';
+        
+        if (!selectedRegion) {
+            areaSelect.disabled = true;
+            return;
+        }
+
+        // Filter and add areas for selected region
+        const areas = state.getAreaData()
+            .filter(item => item.region === selectedRegion)
+            .sort((a, b) => {
+                if (a.area < b.area) return -1;
+                if (a.area > b.area) return 1;
+                return 0;
             });
 
-            areaSelect.disabled = false;
+        areas.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.areaId;
+            option.textContent = item.area;
+            areaSelect.appendChild(option);
         });
 
-        // Handle form submission
-        document.querySelector('form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const selectedArea = areaData.find(item => item.areaId === formData.get('area'));
-            
-            // Add area name to form data
+        areaSelect.disabled = false;
+    });
+
+    // Handle form submission
+    document.getElementById('registrationForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Validate all required fields
+        const region = document.getElementById('region').value;
+        const area = document.getElementById('area').value;
+        const dwelling = document.getElementById('dwelling').value;
+        const meterId = document.getElementById('meterId').value;
+
+        if (!region || !area || !dwelling || !meterId) {
+            alert('Please fill in all required fields');
+            return;
+        }
+        
+        // Validate Meter ID format
+        if (!validateMeterId(meterId)) {
+            alert('Please enter a valid Meter ID in the format 999-999-999');
+            document.getElementById('meterId').classList.add('error');
+            return;
+        }
+        
+        document.getElementById('meterId').classList.remove('error');
+        
+        try {
+            // Create request data object manually
+            const requestData = {
+                region: region,
+                dwelling: dwelling,
+                meterId: meterId
+            };
+
+            // Get area name instead of ID
+            const selectedArea = state.getAreaData().find(item => item.areaId === area);
             if (selectedArea) {
-                formData.set('areaName', selectedArea.area);
+                requestData.area = selectedArea.area;
             }
-            
-            fetch('/register', {
+
+            // Log request details
+            console.log('Request details:', {
+                url: '/register',
                 method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok');
-                }
-                return response.json();
-            })
-            .then(data => {
-                document.getElementById('registerResult').textContent = JSON.stringify(data, null, 2);
-            })
-            .catch(err => {
-                document.getElementById('registerResult').textContent = 'Error: ' + err.message;
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                data: requestData
             });
-        });
-    </script>
+            
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            // Log response details
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                const contentType = response.headers.get('content-type');
+                let errorMessage;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || 'Unknown error occurred';
+                } else {
+                    errorMessage = await response.text();
+                }
+                
+                console.log('Error details:', {
+                    status: response.status,
+                    message: errorMessage
+                });
+                
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('Registration successful!');
+                document.getElementById('registerResult').textContent = 
+                    'Registration successful! Details: ' + 
+                    Object.entries(data)
+                        .map(([key, value]) => `${key}: ${value}`)
+                        .join(', ');
+                this.reset();
+            } else {
+                throw new Error(data.message || 'Registration failed. Please try again.');
+            }
+        } catch (err) {
+            alert(err.message);
+            document.getElementById('registerResult').textContent = 'Error: ' + err.message;
+            console.error('Registration error:', err);
+        }
+    });
+</script>
 </body>
 </html>

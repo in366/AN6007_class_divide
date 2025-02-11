@@ -4,21 +4,29 @@ Author: wdmzj
 Created on: Mon Feb 10 19:56:11 2025
 """
 
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template,redirect
 import json, random, os, datetime, shutil
 import pandas as pd
 import calendar
+import traceback
+import re
+
 
 app = Flask(__name__)
 
+# Base directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, 'data')
+
 # File path configurations
-ACCOUNTS_FILE = "all_account.json"
-CURRENT_TIME_FILE = "current_time.json"
-DAILY_READINGS_DIR = "daily_readings"  # Directory organized by month
-MONTHLY_READINGS_DIR = "month_readings"  # Directory for monthly analysis files
-MONTHLY_CONSUMPTION_FILE = "monthly_consumption.csv"  # Historical monthly power consumption archive
+ACCOUNTS_FILE = os.path.join(DATA_DIR, "all_account.json")
+CURRENT_TIME_FILE = os.path.join(DATA_DIR, "current_time.json")
+DAILY_READINGS_DIR = os.path.join(DATA_DIR, "daily_readings")
+MONTHLY_READINGS_DIR = os.path.join(DATA_DIR, "month_readings")
+AREA_DATA_FILE = os.path.join(BASE_DIR, 'static', 'js', 'area_data.json')
 
 # Ensure required directories exist
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(DAILY_READINGS_DIR, exist_ok=True)
 os.makedirs(MONTHLY_READINGS_DIR, exist_ok=True)
 
@@ -71,6 +79,7 @@ def load_accounts():
 
 def save_accounts(accounts):
     """Save account information"""
+    os.makedirs(os.path.dirname(ACCOUNTS_FILE), exist_ok=True)
     with open(ACCOUNTS_FILE, "w", encoding="utf-8") as f:
         json.dump(accounts, f, ensure_ascii=False, indent=2)
 
@@ -81,45 +90,6 @@ def append_to_daily_cache(reading):
 def is_first_day_maintenance(date):
     """Check if it's maintenance time on the first day of month (0-1 AM)"""
     return date.day == 1 and date.hour == 0
-
-def calculate_monthly_consumption(year, month):
-    """Calculate power consumption for specified month"""
-    month_dir = os.path.join(DAILY_READINGS_DIR, f"{year}{month:02d}")
-    if not os.path.exists(month_dir):
-        return []
-    
-    # Process daily files for the month
-    monthly_data = []
-    daily_files = [f for f in os.listdir(month_dir) if f.startswith('readings_')]
-    
-    if not daily_files:
-        return []
-    
-    # Get account information
-    accounts = {str(acc["meter_ID"]): acc for acc in load_accounts()}
-    
-    # Process each meter's data
-    for meter_id in accounts:
-        readings = []
-        for file in daily_files:
-            file_path = os.path.join(month_dir, file)
-            df = pd.read_csv(file_path)
-            meter_readings = df[df['meter_ID'].astype(str) == meter_id]['meter_value']
-            if not meter_readings.empty:
-                readings.extend(meter_readings)
-        
-        if readings:
-            consumption = max(readings) - min(readings)
-            monthly_data.append({
-                'year': year,
-                'month': month,
-                'meter_ID': meter_id,
-                'area': accounts[meter_id]['area'],
-                'dwelling': accounts[meter_id]['dwelling'],
-                'consumption': round(consumption, 3)
-            })
-    
-    return monthly_data
 
 def archive_and_prepare_monthly_data(current_date):
     """Process historical data and prepare new month during maintenance time"""
@@ -292,36 +262,78 @@ def collect():
 def register():
     """Handle meter registration"""
     if request.method == "POST":
-        area = request.form.get("area")
-        dwelling = request.form.get("dwelling")
-        meter_id = str(int(datetime.datetime.now().timestamp() * 1000)) + str(random.randint(100, 999))
-        current_time = init_or_load_current_time()
-        
-        account = {
-            "meter_ID": meter_id,
-            "area": area,
-            "dwelling": dwelling,
-            "register_time": current_time.isoformat()
-        }
-        
-        # Initialize reading to 0 at registration
-        reading = {
-            "meter_ID": meter_id,
-            "reading_time": current_time.isoformat(),
-            "meter_value": 0
-        }
-        
-        accounts = load_accounts()
-        accounts.append(account)
-        save_accounts(accounts)
-        
-        # Save initial reading
-        latest_readings[meter_id] = 0
-        append_to_daily_cache(reading)
-        
-        return jsonify({"message": "Registration successful", "account": account})
-    else:
-        return render_template("register.html")
+        try:
+            # Get JSON data
+            data = request.get_json()
+            meter_id = data.get("meterId")
+            area = data.get("area")
+            dwelling = data.get("dwelling")
+            
+            if not meter_id or not re.match(r'^\d{3}-\d{3}-\d{3}$', meter_id):
+                return jsonify({
+                    "success": False,
+                    "message": "Invalid meter ID format. Must be in format 999-999-999"
+                }), 400
+
+            # Check if meter_id already exists
+            accounts = load_accounts()
+            if any(account["meter_ID"] == meter_id for account in accounts):
+                return jsonify({
+                    "success": False,
+                    "message": "Meter ID already exists"
+                }), 400
+
+            current_time = init_or_load_current_time()
+            formatted_time = current_time.strftime("%Y-%m-%dT%H:%M:%S")
+            
+            account = {
+                "meter_ID": meter_id,
+                "area": area,
+                "dwelling": dwelling,
+                "register_time": formatted_time
+            }
+            
+            reading = {
+                "meter_ID": meter_id,
+                "reading_time": formatted_time,
+                "meter_value": 0
+            }
+            
+            # Add new account
+            if not isinstance(accounts, list):
+                accounts = []
+            accounts.append(account)
+            save_accounts(accounts)
+            
+            # Update latest readings and daily cache
+            latest_readings[meter_id] = 0
+            append_to_daily_cache(reading)
+            
+            return jsonify({
+                "success": True,
+                "message": "Registration successful",
+                "account": account
+            })
+            
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": str(e)
+            }), 400
+            
+    return render_template("register.html")
+
+
+@app.route("/api/areas", methods=["GET"])
+def get_areas():
+    """Get area data from JSON file"""
+    try:
+        with open(AREA_DATA_FILE, 'r', encoding='utf-8') as f:
+            return jsonify(json.load(f))
+    except FileNotFoundError:
+        return jsonify({"error": "Area data file not found"}), 404
+    except json.JSONDecodeError:
+        return jsonify({"error": "Invalid area data format"}), 500
 
 @app.route("/meter_reading", methods=["POST"])
 def meter_reading():
@@ -408,6 +420,58 @@ def meter_reading():
         "new_time": next_time.isoformat()
     })
 
+@app.route('/reset')
+def reset_system():
+    try:
+        base_path = 'data'
+        
+        if not os.path.exists(base_path):
+            os.makedirs(base_path)
+
+        # 1. 清空 daily_readings 目录
+        daily_path = os.path.join(base_path, 'daily_readings')
+        if not os.path.exists(daily_path):
+            os.makedirs(daily_path)
+        else:
+            for folder in os.listdir(daily_path):
+                folder_path = os.path.join(daily_path, folder)
+                if os.path.isdir(folder_path):
+                    shutil.rmtree(folder_path)
+
+        # 2. 清空 month_readings 目录
+        month_path = os.path.join(base_path, 'month_readings')
+        if not os.path.exists(month_path):
+            os.makedirs(month_path)
+        else:
+            for folder in os.listdir(month_path):
+                folder_path = os.path.join(month_path, folder)
+                if os.path.isdir(folder_path):
+                    shutil.rmtree(folder_path)
+
+        # 3. 清空 all_account.json
+        account_path = os.path.join(base_path, 'all_account.json')
+        with open(account_path, 'w', encoding='utf-8') as f:
+            json.dump({}, f, ensure_ascii=False, indent=2)
+
+        # 4. 重置 current_time.json
+        time_path = os.path.join(base_path, 'current_time.json')
+        with open(time_path, 'w', encoding='utf-8') as f:
+            json.dump({"current_time": "2024-05-01T00:00:00"}, f, ensure_ascii=False, indent=2)
+
+        return """
+        <script>
+            alert('Reset Success！');
+            window.location.href = '/';
+        </script>
+        """
+
+    except Exception as e:
+        return """
+        <script>
+            alert('Reset Fail：{}');
+            window.location.href = '/';
+        </script>
+        """.format(str(e))
 
 if __name__ == "__main__":
     app.run()
