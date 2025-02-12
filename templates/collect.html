@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Collect Meter Readings</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
     <div class="container">
@@ -49,25 +49,37 @@
     </div>
 
     <script>
+        // 获取当前时间
         async function getCurrentTime() {
+            const timeElement = document.getElementById('currentTime');
             try {
                 const response = await fetch('/current_time');
-                if (!response.ok) throw new Error('Failed to fetch current time');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 const timeInfo = data["Current Simulation Time"];
                 const formattedTime = `Date: ${timeInfo.Date}\nTime: ${timeInfo.Time}\nWeekday: ${timeInfo.Weekday}`;
-                document.getElementById('currentTime').textContent = formattedTime;
+                timeElement.textContent = formattedTime;
             } catch (err) {
-                document.getElementById('currentTime').textContent = 'Error: ' + err.message;
+                console.error('Error fetching time:', err);
+                timeElement.textContent = 'Error: Failed to fetch current time. Please try again.';
             }
         }
 
+        // 收集电表读数
         async function collectMeterReading() {
             const resultElement = document.getElementById("meterReadingResult");
-            resultElement.textContent = "Collecting readings...";
-            
             const incrementValue = parseInt(document.getElementById("incrementValue").value);
             const incrementUnit = document.getElementById("incrementUnit").value;
+            
+            // 输入验证
+            if (isNaN(incrementValue) || incrementValue < 1) {
+                resultElement.textContent = "Error: Please enter a valid increment value (minimum 1)";
+                return;
+            }
+            
+            resultElement.textContent = "Collecting readings...";
             
             try {
                 const response = await fetch('/meter_reading', { 
@@ -81,17 +93,27 @@
                     })
                 });
                 
-                if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || data.message || 'Server returned an error');
+                }
+                
                 resultElement.textContent = JSON.stringify(data, null, 2);
-                getCurrentTime();
+                // 成功后更新时间显示
+                await getCurrentTime();
+                
             } catch (err) {
-                resultElement.textContent = 'Error: ' + err.message;
+                console.error('Error collecting readings:', err);
+                resultElement.textContent = 'Error: ' + (err.message || 'Failed to collect readings. Please try again.');
             }
         }
 
-        // Initial time fetch
-        getCurrentTime();
+        // 页面加载时获取当前时间
+        document.addEventListener('DOMContentLoaded', getCurrentTime);
+
+        // 每30秒自动更新时间
+        setInterval(getCurrentTime, 30000);
     </script>
 </body>
 </html>
