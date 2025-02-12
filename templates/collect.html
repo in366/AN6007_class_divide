@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collect Meter Readings</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Collect Meter Readings</h1>
+        
+        <div class="current-time-container">
+            <h2>Current Time</h2>
+            <pre id="currentTime">Loading current time...</pre>
+        </div>
+
+        <h2 style="text-align: center; margin-bottom: 1rem;">Time Control</h2>
+        
+        <div class="note">
+            <div class="form-group">
+                <label for="incrementValue">Increment Value</label>
+                <input type="number" 
+                    id="incrementValue" 
+                    value="1" 
+                    min="1" 
+                    style="width: 100%">
+            </div>
+            <div class="form-group">
+                <label for="incrementUnit">Time Unit</label>
+                <select id="incrementUnit" style="width: 100%">
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                    <option value="days" selected>Days</option>
+                    <option value="months">Months</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button onclick="collectMeterReading()">Confirm Collection</button>
+            <button onclick="location.href='/'" style="background-color: var(--secondary-color)">Return Home</button>
+        </div>
+
+        <div class="result-container">
+            <h2>Reading Results</h2>
+            <pre id="meterReadingResult"></pre>
+        </div>
+    </div>
+
+    <script>
+        async function getCurrentTime() {
+            try {
+                const response = await fetch('/current_time');
+                if (!response.ok) throw new Error('Failed to fetch current time');
+                const data = await response.json();
+                const timeInfo = data["Current Simulation Time"];
+                const formattedTime = `Date: ${timeInfo.Date}\nTime: ${timeInfo.Time}\nWeekday: ${timeInfo.Weekday}`;
+                document.getElementById('currentTime').textContent = formattedTime;
+            } catch (err) {
+                document.getElementById('currentTime').textContent = 'Error: ' + err.message;
+            }
+        }
+
+        async function collectMeterReading() {
+            const resultElement = document.getElementById("meterReadingResult");
+            resultElement.textContent = "Collecting readings...";
+            
+            const incrementValue = parseInt(document.getElementById("incrementValue").value);
+            const incrementUnit = document.getElementById("incrementUnit").value;
+            
+            try {
+                const response = await fetch('/meter_reading', { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        value: incrementValue,
+                        unit: incrementUnit
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Network response was not ok');
+                const data = await response.json();
+                resultElement.textContent = JSON.stringify(data, null, 2);
+                getCurrentTime();
+            } catch (err) {
+                resultElement.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        // Initial time fetch
+        getCurrentTime();
+    </script>
+</body>
+</html>

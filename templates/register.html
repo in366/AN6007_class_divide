@@ -1,62 +1,264 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Smart Meter Platform - Registration</title>
-  <style>
-    .note {
-      color: #666;
-      font-size: 0.9em;
-      margin-top: 20px;
-    }
-  </style>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Meter Platform - Registration</title>
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <h1>Register New Account</h1>
-  
-  <form action="/register" method="POST">
-    <div>
-      <label for="area">Area:</label>
-      <input type="text" id="area" name="area" required>
+    <div class="container">
+        <h1>Register New Account</h1>
+        
+        <div class="form-container">
+            <form action="/register" method="POST" id="registrationForm">
+                <div class="form-group">
+                    <label for="region">Region:</label>
+                    <select id="region" name="region" required>
+                        <option value="">Select a region</option>
+                        <option value="Central Region">Central Region</option>
+                        <option value="North Region">North Region</option>
+                        <option value="East Region">East Region</option>
+                        <option value="West Region">West Region</option>
+                        <option value="North East Region">North East Region</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="area">Area:</label>
+                    <select id="area" name="area" required disabled>
+                        <option value="">Select a region first</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="dwelling">Dwelling Type:</label>
+                    <select id="dwelling" name="dwelling" required>
+                        <option value="">Select a dwelling type</option>
+                        <option value="1">1-room / 2-room</option>
+                        <option value="2">Private Apartments and Condominiums</option>
+                        <option value="3">Landed Properties</option>
+                        <option value="4">5-room and Executive</option>
+                        <option value="5">3-room</option>
+                        <option value="6">4-room</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="meterId">Meter ID:</label>
+                    <input 
+                        type="text" 
+                        id="meterId" 
+                        name="meterId" 
+                        class="meter-id-input"
+                        placeholder="Format: 999-999-999"
+                        required
+                        pattern="\d{3}-\d{3}-\d{3}"
+                    >
+                </div>
+                
+                <button type="submit">Submit Registration</button>
+            </form>
+        </div>
+
+        <div class="note">
+            <h3>Important Information</h3>
+            <ul>
+                <li>Initial meter reading for new accounts is 0</li>
+                <li>System start date is May 1st, 2024</li>
+                <li>Data collection automatically records power usage every 30 minutes throughout the day</li>
+            </ul>
+        </div>
+
+        <button class="home-button" onclick="location.href='/'">Return to Home</button>
+
+        <pre id="registerResult"></pre>
     </div>
-    <br>
-    <div>
-      <label for="dwelling">Dwelling Number:</label>
-      <input type="text" id="dwelling" name="dwelling" required>
-    </div>
-    <br>
-    <button type="submit">Submit Registration</button>
-  </form>
-  <div class="note">
-    Notes:
-    <ul>
-      <li>Initial meter reading for new accounts is 0</li>
-      <li>System start date is May 1st, 2024</li>
-      <li>Data collection automatically records power usage every 30 minutes throughout the day</li>
-    </ul>
-  </div>
-  <br>
-  <button onclick="location.href='/'">Return to Home</button>
-  <!-- Display registration results -->
-  <pre id="registerResult"></pre>
-  <script>
-    document.querySelector('form').addEventListener('submit', function(e) {
-      e.preventDefault();
-      
-      const formData = new FormData(this);
-      
-      fetch('/register', {
-        method: 'POST',
-        body: formData
-      })
-      .then(response => response.json())
-      .then(data => {
-        document.getElementById('registerResult').textContent = JSON.stringify(data, null, 2);
-      })
-      .catch(err => {
-        document.getElementById('registerResult').textContent = 'Error: ' + err;
-      });
+
+<script>
+    // Store area data globally
+    const state = {
+        areaData: [],
+        setAreaData(data) {
+            this.areaData = data;
+        },
+        getAreaData() {
+            return this.areaData;
+        }
+    };
+
+    // Fetch area data from API
+    async function fetchAreaData() {
+        try {
+            const response = await fetch('/static/js/area_data.json');
+            if (!response.ok) {
+                throw new Error('Failed to fetch area data');
+            }
+            const data = await response.json();
+            state.setAreaData(data.areas || []);
+        } catch (error) {
+            console.error('Error loading area data:', error);
+            document.getElementById('registerResult').textContent = 'Error: Failed to load area data. Please try again later.';
+        }
+    }
+
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAreaData();
     });
-  </script>
+
+    // Validate Meter ID format
+    function validateMeterId(meterId) {
+        const regex = /^\d{3}-\d{3}-\d{3}$/;
+        return regex.test(meterId);
+    }
+
+    // Format Meter ID as user types
+    document.getElementById('meterId').addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+        if (value.length > 9) value = value.slice(0, 9);
+        
+        // Add hyphens
+        if (value.length >= 6) {
+            value = value.slice(0, 3) + '-' + value.slice(3, 6) + '-' + value.slice(6);
+        } else if (value.length >= 3) {
+            value = value.slice(0, 3) + '-' + value.slice(3);
+        }
+        
+        e.target.value = value;
+    });
+
+    // Handle region selection
+    document.getElementById('region').addEventListener('change', function() {
+        const areaSelect = document.getElementById('area');
+        const selectedRegion = this.value;
+        
+        // Clear current options
+        areaSelect.innerHTML = '<option value="">Select an area</option>';
+        
+        if (!selectedRegion) {
+            areaSelect.disabled = true;
+            return;
+        }
+
+        // Filter and add areas for selected region
+        const areas = state.getAreaData()
+            .filter(item => item.region === selectedRegion)
+            .sort((a, b) => {
+                if (a.area < b.area) return -1;
+                if (a.area > b.area) return 1;
+                return 0;
+            });
+
+        areas.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.areaId;
+            option.textContent = item.area;
+            areaSelect.appendChild(option);
+        });
+
+        areaSelect.disabled = false;
+    });
+
+    // Handle form submission
+    document.getElementById('registrationForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Validate all required fields
+        const region = document.getElementById('region').value;
+        const area = document.getElementById('area').value;
+        const dwelling = document.getElementById('dwelling').value;
+        const meterId = document.getElementById('meterId').value;
+
+        if (!region || !area || !dwelling || !meterId) {
+            alert('Please fill in all required fields');
+            return;
+        }
+        
+        // Validate Meter ID format
+        if (!validateMeterId(meterId)) {
+            alert('Please enter a valid Meter ID in the format 999-999-999');
+            document.getElementById('meterId').classList.add('error');
+            return;
+        }
+        
+        document.getElementById('meterId').classList.remove('error');
+        
+        try {
+            // Create request data object manually
+            const requestData = {
+                region: region,
+                dwelling: dwelling,
+                meterId: meterId
+            };
+
+            // Get area name instead of ID
+            const selectedArea = state.getAreaData().find(item => item.areaId === area);
+            if (selectedArea) {
+                requestData.area = selectedArea.area;
+            }
+
+            // Log request details
+            console.log('Request details:', {
+                url: '/register',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                data: requestData
+            });
+            
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+
+            // Log response details
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                const contentType = response.headers.get('content-type');
+                let errorMessage;
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || 'Unknown error occurred';
+                } else {
+                    errorMessage = await response.text();
+                }
+                
+                console.log('Error details:', {
+                    status: response.status,
+                    message: errorMessage
+                });
+                
+                throw new Error(errorMessage);
+            }
+
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('Registration successful!');
+                document.getElementById('registerResult').textContent = 
+                    'Registration successful! Details: ' + 
+                    Object.entries(data)
+                        .map(([key, value]) => `${key}: ${value}`)
+                        .join(', ');
+                this.reset();
+            } else {
+                throw new Error(data.message || 'Registration failed. Please try again.');
+            }
+        } catch (err) {
+            alert(err.message);
+            document.getElementById('registerResult').textContent = 'Error: ' + err.message;
+            console.error('Registration error:', err);
+        }
+    });
+</script>
 </body>
 </html>
