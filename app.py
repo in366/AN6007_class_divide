@@ -10,7 +10,7 @@ import pandas as pd
 from flask import Flask, request, jsonify, render_template
 
 # ==========================
-# 数据结构定义
+# Data Structure Definition
 # ==========================
 
 @dataclass
@@ -20,7 +20,7 @@ class MeterReading:
     meter_value: float
 
 # ==========================
-# 目录管理：负责文件夹和路径管理
+# Directory Manager: Handles folder and path management
 # ==========================
 
 class DirectoryManager:
@@ -44,7 +44,7 @@ class DirectoryManager:
         return month_dir
 
 # ==========================
-# 账户管理：负责账户的加载、保存与注册
+# Account Manager: Handles account loading, saving and registration
 # ==========================
 
 class AccountManager:
@@ -81,7 +81,7 @@ class AccountManager:
         return account
 
 # ==========================
-# 时间管理：处理当前模拟时间的获取与更新
+# Time Manager: Handles simulation time retrieval and updates
 # ==========================
 
 class TimeManager:
@@ -103,7 +103,7 @@ class TimeManager:
             json.dump({"current_time": current_time.isoformat()}, f)
 
 # ==========================
-# 数据采集器：生成电表读数，并维护最新读数和每日缓存
+# Reading Generator: Generates meter readings and maintains latest readings and daily cache
 # ==========================
 
 class ReadingGenerator:
@@ -136,23 +136,23 @@ class ReadingGenerator:
         self, day_start: datetime.datetime, day_end: datetime.datetime
     ) -> List[dict]:
         """
-        在同一天内生成数据：
-        - 如果起始时间在0点，则跳过0:00～1:00（维护时段）。
-        - 每30分钟生成一个数据点，直到达到 day_end。
+        Generate data within the same day:
+        - If start time is at midnight, skip 0:00-1:00 (maintenance period)
+        - Generate a data point every 30 minutes until reaching day_end
         """
         accounts = self.account_manager.load_accounts()
         daily_readings = []
-        # 将起始时间归整：如果在维护时段，则从1点开始
+        # Normalize start time: if in maintenance period, start from 1:00
         current = day_start.replace(minute=0, second=0, microsecond=0)
         if current.hour == 0:
             current = current.replace(hour=1)
         
         while current < day_end:
             next_time = current + datetime.timedelta(minutes=30)
-            # 如果下一个时间点超过结束时间，则退出
+            # Exit if next time point exceeds end time
             if next_time > day_end:
                 break
-            # 如果下一个时间点进入维护时段，则结束当天生成（维护时段不生成数据）
+            # End generation for the day if next time point enters maintenance period
             if next_time.hour == 0:
                 break
 
@@ -179,18 +179,19 @@ class ReadingGenerator:
         self, start_time: datetime.datetime, end_time: datetime.datetime
     ) -> List[dict]:
         """
-        根据起始和结束时间，按天生成数据。如果跨天，则遍历每一天调用 generate_readings_for_day。
+        Generate data based on start and end times. If spanning multiple days,
+        iterate through each day calling generate_readings_for_day.
         """
         readings = []
-        # 如果在同一天内，直接生成数据
+        # If within the same day, generate data directly
         if start_time.date() == end_time.date():
             return self.generate_readings_for_day(start_time, end_time)
         
-        # 处理起始天
+        # Process first day
         first_day_end = datetime.datetime.combine(start_time.date(), datetime.time(23, 59, 59))
         readings.extend(self.generate_readings_for_day(start_time, first_day_end))
 
-        # 处理中间整天
+        # Process middle days
         next_day = start_time.date() + datetime.timedelta(days=1)
         while next_day < end_time.date():
             day_start = datetime.datetime.combine(next_day, datetime.time(0, 0))
@@ -198,7 +199,7 @@ class ReadingGenerator:
             readings.extend(self.generate_readings_for_day(day_start, day_end))
             next_day += datetime.timedelta(days=1)
 
-        # 处理结束天
+        # Process last day
         last_day_start = datetime.datetime.combine(end_time.date(), datetime.time(0, 0))
         readings.extend(self.generate_readings_for_day(last_day_start, end_time))
         return readings
@@ -215,9 +216,8 @@ class ReadingGenerator:
             "new_time": next_time.isoformat()
         }
 
-
 # ==========================
-# 日数据处理：整理每日缓存数据并保存为 JSON 文件
+# Daily Processor: Organizes daily cache data and saves to JSON files
 # ==========================
 
 class DailyProcessor:
@@ -255,28 +255,24 @@ class DailyProcessor:
     
     def process_all(self, daily_cache: List[MeterReading]):
         """
-        按照日期对 daily_cache 分组，每天分别归档数据
+        Group daily_cache by date and archive data for each day separately
         """
         if not daily_cache:
             return
         
         readings_by_date = {}
         for reading in daily_cache:
-            # 提取读数对应的日期字符串
             date_str = datetime.datetime.fromisoformat(reading.reading_time).strftime("%Y-%m-%d")
             if date_str not in readings_by_date:
                 readings_by_date[date_str] = []
             readings_by_date[date_str].append(reading)
         
-        # 对每个日期调用 process
         for date_str, readings in readings_by_date.items():
-            # 使用该日期最后一个读数的时间作为归档日期
             process_date = datetime.datetime.fromisoformat(readings[-1].reading_time)
             self.process(readings, process_date)
 
-
 # ==========================
-# 月数据归档：归档月数据、生成月用电量及清理旧数据
+# Monthly Processor: Archives monthly data, generates monthly consumption and cleans old data
 # ==========================
 
 class MonthlyProcessor:
@@ -285,27 +281,24 @@ class MonthlyProcessor:
 
     def archive(self, current_date: datetime.datetime):
         """
-        归档月度数据并清理旧的日数据
-        - 归档：上上个月的数据
-        - 保留：当前月和上个月的日数据
+        Archive monthly data and clean old daily data
+        - Archive: Data from two months ago
+        - Retain: Current month and previous month's daily data
         """
-        # 当前月第一天
         first_of_current = current_date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        # 上个月最后一天、第一天
         last_month = first_of_current - datetime.timedelta(days=1)
         last_month_first = last_month.replace(day=1)
-        # 归档目标月份：上上个月
         month_to_process = last_month_first - datetime.timedelta(days=1)
         month_to_process = month_to_process.replace(day=1)
         
         if month_to_process < datetime.datetime(2024, 5, 1):
             return
 
-        # 得到目标月份对应的 daily_readings 目录
         process_month_dir = self.directory_manager.get_month_directory(
             self.directory_manager.daily_readings_dir, month_to_process
         )
         process_monthly_file = os.path.join(self.directory_manager.monthly_readings_dir, "month_readings.json")
+        
         if os.path.exists(process_monthly_file):
             with open(process_monthly_file, "r", encoding="utf-8") as f:
                 monthly_data = json.load(f)
@@ -316,7 +309,6 @@ class MonthlyProcessor:
         last_readings = {}
 
         if os.path.exists(process_month_dir):
-            # 遍历目标月份下的所有日数据文件
             for daily_file in sorted(os.listdir(process_month_dir)):
                 if daily_file.endswith(".json"):
                     daily_path = os.path.join(process_month_dir, daily_file)
@@ -328,7 +320,6 @@ class MonthlyProcessor:
                             first_readings[meter_id] = readings[0]["value"]
                         last_readings[meter_id] = readings[-1]["value"]
 
-        # 计算每个电表的本月用量
         for meter_id in first_readings.keys():
             if meter_id in last_readings:
                 month_key = month_to_process.strftime("%Y-%m")
@@ -341,34 +332,34 @@ class MonthlyProcessor:
         with open(process_monthly_file, "w", encoding="utf-8") as f:
             json.dump(monthly_data, f, ensure_ascii=False, indent=2)
 
-        # 清理 2 个月前的 daily_readings 数据（即清理所有日期早于上个月第一天的目录）
         self._cleanup_old_readings(last_month_first)
 
     def _cleanup_old_readings(self, current_month_first: datetime.datetime):
         """
-        清理日数据，只保留最近两个月的数据
-        参数 current_month_first: 当前月份的第一天
-        保留：当前月和上个月的数据
-        删除：更早的数据
+        Clean daily data, keeping only the most recent two months
+        param current_month_first: First day of current month
+        Keep: Current month and previous month's data
+        Delete: Earlier data
         """
         if os.path.exists(self.directory_manager.daily_readings_dir):
-            # 计算上个月第一天（这是最早需要保留的日期）
-            earliest_keep_date = current_month_first - datetime.timedelta(days=1)  # 上个月最后一天
-            earliest_keep_date = earliest_keep_date.replace(day=1)  # 上个月第一天
+            # Calculate first day of previous month (earliest date to keep)
+            earliest_keep_date = current_month_first - datetime.timedelta(days=1)  # Last day of previous month
+            earliest_keep_date = earliest_keep_date.replace(day=1)  # First day of previous month
 
             for year_month_dir in os.listdir(self.directory_manager.daily_readings_dir):
                 try:
                     year = int(year_month_dir[:4])
                     month = int(year_month_dir[4:])
                     dir_date = datetime.datetime(year, month, 1)
-                    # 删除早于上个月的数据
+                    # Delete data earlier than previous month
                     if dir_date < earliest_keep_date:
                         dir_path = os.path.join(self.directory_manager.daily_readings_dir, year_month_dir)
                         shutil.rmtree(dir_path)
                 except ValueError:
                     continue
+
 # ==========================
-# 整个智能电表系统的门面类：将各个模块组合
+# Smart Meter System: Facade class combining all modules
 # ==========================
 
 class SmartMeterSystem:
@@ -384,38 +375,38 @@ class SmartMeterSystem:
         current_time = self.time_manager.get_current_time()
         formatted_time = current_time.strftime("%Y-%m-%dT%H:%M:%S")
         account = self.account_manager.register_account(meter_id, area, dwelling, formatted_time)
-        # 初始化电表读数
+        # Initialize meter reading
         self.reading_generator.latest_readings[meter_id] = 0
         self.reading_generator.daily_cache.append(MeterReading(meter_id, formatted_time, 0))
         return account
 
     def collect_readings(self, increment_unit: str = 'days', increment_value: int = 1) -> dict:
-        # 记录采集前的当前时间
+        # Record current time before collection
         old_time = self.time_manager.get_current_time()
         result = self.reading_generator.collect(increment_unit, increment_value)
-        # 按日期归档 daily_cache 中的数据
+        # Archive daily_cache data by date
         self.daily_processor.process_all(self.reading_generator.daily_cache)
-        # 清空缓存
+        # Clear cache
         self.reading_generator.daily_cache.clear()
         new_time = datetime.datetime.fromisoformat(result["new_time"])
-        # 如果采集前后月份发生了变化，则触发归档（归档 n-2 个月的数据）
+        # If month changes during collection, trigger archiving (archive data from two months ago)
         if old_time.month != new_time.month:
             self.monthly_processor.archive(new_time)
         return result
 
     def reset_system(self) -> bool:
         try:
-            # 清空 daily_readings 和 monthly_readings 目录
+            # Clear daily_readings and monthly_readings directories
             for directory in [self.directory_manager.daily_readings_dir, self.directory_manager.monthly_readings_dir]:
                 if os.path.exists(directory):
                     shutil.rmtree(directory)
                 os.makedirs(directory)
-            # 重置账户文件
+            # Reset account file
             with open(self.directory_manager.accounts_file, 'w', encoding='utf-8') as f:
                 json.dump([], f, ensure_ascii=False, indent=2)
-            # 重新设定时间
+            # Reset time
             self.time_manager.save_current_time(datetime.datetime(2024, 5, 1))
-            # 清空缓存
+            # Clear cache
             self.reading_generator.latest_readings.clear()
             self.reading_generator.daily_cache.clear()
             return True
@@ -426,12 +417,12 @@ class SmartMeterSystem:
             return False
 
 # ==========================
-# Flask 应用部分
+# Flask Application
 # ==========================
 
 app = Flask(__name__, 
-            template_folder='templates',  # 指定模板目录
-            static_folder='static'         # 指定静态文件目录
+            template_folder='templates',  # Specify template directory
+            static_folder='static'        # Specify static files directory
 )
 meter_system = SmartMeterSystem(os.path.dirname(os.path.abspath(__file__)))
 
