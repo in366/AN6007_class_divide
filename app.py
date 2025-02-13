@@ -178,20 +178,32 @@ class SmartMeterSystem:
         all_readings = []
         current = current_time
         
+    # ======= 新增部分：如果目标时间跨度超过一天，则采用逐天生成数据的方式 =======
+        if (next_time - current_time).total_seconds() > 86400:
+            temp_current = current_time
+            while temp_current < next_time:
+                # 计算当天结束时间（不超过 next_time）
+                day_end = min(temp_current + datetime.timedelta(days=1), next_time)
+                # 递归调用 _generate_readings 处理一天内的数据（注意此时时间跨度小于等于1天）
+                daily_readings = self._generate_readings(temp_current, day_end, accounts)
+                all_readings.extend(daily_readings)
+                temp_current += datetime.timedelta(days=1)
+            return all_readings
+        # ======= 结束新增部分 =======
+
+
         # 不要立即跳过0点，而是保持在0点
         current = current.replace(minute=0, second=0, microsecond=0)
         
         while current <= next_time:
             # 如果是维护时间段(0:00-1:00)
             if current.hour == 0:
-                # 执行维护操作
-                self._process_daily_data(current - datetime.timedelta(minutes=1))
-                
-                # 如果是新的一个月的第一天，执行月度维护
+                process_date = current - datetime.timedelta(minutes=1)
+                # 假设模拟开始日期为 2024-05-01
+                if process_date.date() >= datetime.date(2024, 5, 1):
+                    self._process_daily_data(process_date)
                 if current.day == 1:
                     self._archive_and_prepare_monthly_data(current)
-                
-                # 维护完成后，跳到1:00
                 current = current.replace(hour=1)
                 continue
                 
@@ -230,8 +242,10 @@ class SmartMeterSystem:
         
         # 处理最后一天的数据
         if self.daily_cache:
-            self._process_daily_data(next_time)
-        
+            # 使用 daily_cache 中最后一条读数的时间作为归档日期
+            last_reading_time = datetime.datetime.fromisoformat(self.daily_cache[-1].reading_time)
+            self._process_daily_data(last_reading_time)
+                
         return all_readings
 
     def _process_daily_data(self, current_date: datetime.datetime):
